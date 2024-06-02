@@ -11,9 +11,8 @@ import requests
 from keycloak import KeycloakAdmin
 from keycloak import KeycloakOpenIDConnection
 
-
 # ---------------------------------------------------------------------------- #
-# Configure the Keycloak connection to master realm
+# Configure the Keycloak admin connection to master realm
 # ---------------------------------------------------------------------------- #
 server_url = "http://localhost:6100/"
 username = "admin"
@@ -45,34 +44,58 @@ keycloak_admin.connection.user_realm_name = keycloak_admin.connection.realm_name
 keycloak_admin.connection.realm_name = realm_name
 
 # ---------------------------------------------------------------------------- #
-# Create a new user
+# Create a pair of users
 # ---------------------------------------------------------------------------- #
 # Create alpha user
-alpha_username = "alpha-user"
+alpha_username = "alpha-username"
 user_payload = {
     "username": alpha_username,
     "enabled": True,
 }
 alpha_user_uuid = keycloak_admin.create_user(payload=user_payload)
 
+# Set password for alpha user
+alpha_password = "alpha-password"
+keycloak_admin.set_user_password(user_id=alpha_user_uuid,
+                                 password=alpha_password,
+                                 temporary=False)
+
 # Create beta user
-beta_username = "beta-user"
+beta_username = "beta-username"
 user_payload['username'] = beta_username
-keycloak_admin.create_user(payload=user_payload)
+beta_user_uuid = keycloak_admin.create_user(payload=user_payload)
+
+# Set password for beta user
+beta_password = "beta-password"
+keycloak_admin.set_user_password(user_id=beta_user_uuid,
+                                 password=beta_password,
+                                 temporary=False)
 
 # ---------------------------------------------------------------------------- #
-# Create client
+# Create clients
 # ---------------------------------------------------------------------------- #
-client_id = "demo-client"
-client_payload = {
-    "clientId": client_id,
-    "name": "Demo client for User-Managed Access authorization",
+# Create client for resource server
+resource_server_client_id = "resource-server-client"
+resource_server_client_payload = {
+    "clientId": resource_server_client_id,
+    "name": "Demo Resource Server for User-Managed Access authorization",
     "enabled": True,
     "publicClient": False,
     "serviceAccountsEnabled": True,
     "authorizationServicesEnabled": True
 }
-client_uuid = keycloak_admin.create_client(payload=client_payload)
+resource_server_client_uuid = keycloak_admin.create_client(payload=resource_server_client_payload)
+
+# Create client for user agent
+user_agent_client_id = "user-agent-client"
+user_agent_client_payload = {
+    "clientId": user_agent_client_id,
+    "name": "Demo User Agent for User-Managed Access authorization",
+    "enabled": True,
+    "publicClient": True,
+    "directAccessGrantsEnabled": True
+}
+user_agent_client_uuid = keycloak_admin.create_client(payload=user_agent_client_payload)
 
 # ---------------------------------------------------------------------------- #
 # Create resource
@@ -83,7 +106,7 @@ resource_payload = {
     "displayName": "Alpha resource",
     "ownerManagedAccess": True
 }
-resource = keycloak_admin.create_client_authz_resource(client_id=client_uuid,
+resource = keycloak_admin.create_client_authz_resource(client_id=resource_server_client_uuid,
                                                        payload=resource_payload)
 
 # ---------------------------------------------------------------------------- #
@@ -94,7 +117,7 @@ scope_payload = {
     "name": scope_name,
     "displayName": "Allows read access to resource"
 }
-scope = keycloak_admin.create_client_authz_scopes(client_id=client_uuid,
+scope = keycloak_admin.create_client_authz_scopes(client_id=resource_server_client_uuid,
                                                   payload=scope_payload)
 
 # ---------------------------------------------------------------------------- #
@@ -103,7 +126,7 @@ scope = keycloak_admin.create_client_authz_scopes(client_id=client_uuid,
 #   because the KeycloakAdmin class does not support it yet
 # ---------------------------------------------------------------------------- #
 url = (f"{server_url}admin/realms/{realm_name}/clients/"
-       f"{client_uuid}/authz/resource-server/policy/user")
+       f"{resource_server_client_uuid}/authz/resource-server/policy/user")
 policy_name = "alpha-user-can"
 headers = {
     'Authorization': f"Bearer {keycloak_admin.connection.token.get('access_token')}",
@@ -134,5 +157,5 @@ permission_payload = {
     "policies": [policy.get('id')],
     "decisionStrategy": "UNANIMOUS"
 }
-permission = keycloak_admin.create_client_authz_resource_based_permission(client_id=client_uuid,
+permission = keycloak_admin.create_client_authz_resource_based_permission(client_id=resource_server_client_uuid,
                                                                           payload=permission_payload)
